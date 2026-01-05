@@ -180,13 +180,30 @@ src/
   ├── index.ts           # Main entry point
   ├── cli.ts             # CLI entry point 
   ├── server.ts          # MCP server implementation
+  ├── mcp_hook.ts        # MCP protocol hooks
   └── services/
-      └── yuque.ts       # Yuque API service
+      ├── types.ts       # TypeScript type definitions
+      ├── yuque.ts       # Backward compatible exports
+      └── yuque/
+          ├── index.ts       # Main YuqueService integration
+          ├── client.ts      # Base HTTP client
+          ├── user.ts        # User-related operations
+          ├── group.ts       # Group/team management
+          ├── repo.ts        # Repository operations
+          ├── document.ts    # Document CRUD
+          ├── toc.ts         # Table of contents management
+          ├── search.ts      # Search functionality
+          └── statistics.ts  # Statistics and analytics
 ```
 
 ### Adding New Tools
 
-To add a new tool, modify the `registerTools` method in `src/server.ts`.
+To add a new tool:
+
+1. Choose or create an appropriate service module in `src/services/yuque/`
+2. Add the API method in the service class
+3. Expose the method in the `YuqueService` class in `src/services/yuque/index.ts`
+4. Register the new tool in the `registerTools` method in `src/server.ts`
 
 ## API Improvements
 

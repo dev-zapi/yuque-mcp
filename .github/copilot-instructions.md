@@ -33,7 +33,18 @@ src/
   ├── config.ts          # Configuration management, reads environment variables
   ├── mcp_hook.ts        # MCP protocol hooks, handles query parameters and message body
   └── services/
-      └── yuque.ts       # Yuque API wrapper service
+      ├── types.ts       # TypeScript type definitions for all Yuque entities
+      ├── yuque.ts       # Backward compatible exports
+      └── yuque/
+          ├── index.ts       # Main YuqueService that combines all sub-services
+          ├── client.ts      # Base HTTP client with authentication
+          ├── user.ts        # User-related operations
+          ├── group.ts       # Group/team management operations
+          ├── repo.ts        # Repository (Book) operations
+          ├── document.ts    # Document CRUD operations
+          ├── toc.ts         # Table of contents management
+          ├── search.ts      # Search functionality
+          └── statistics.ts  # Analytics and statistics operations
 ```
 
 ### Core Component Descriptions
@@ -75,19 +86,48 @@ src/
    - `get_group_book_statistics` - Repository statistics
    - `get_group_doc_statistics` - Document statistics
 
-#### 3. `services/yuque.ts` - YuqueService Class
-**Responsibilities**: Encapsulate all Yuque API calls
-- Manage HTTP client (axios)
-- Handle authentication (API Token)
-- Define data interfaces (TypeScript interfaces)
-- Implement all API methods
+#### 3. `services/` - Modular Service Architecture
 
-**Data Models**:
-- `YuqueUser` - User information
-- `YuqueGroup` - Team/organization information
-- `YuqueDoc` - Document information
-- `YuqueRepo` - Repository information
-- Various statistics data interfaces
+**Main Components**:
+
+- **`types.ts`**: Central type definitions for all Yuque entities
+  - `YuqueUser`, `YuqueGroup`, `YuqueDoc`, `YuqueRepo`
+  - `YuqueDocVersion`, `YuqueTocItem`, `YuqueSearchResult`
+  - All interface definitions shared across services
+
+- **`yuque/client.ts`**: Base HTTP client (`YuqueClient`)
+  - Axios instance management
+  - Authentication header handling
+  - Configuration update methods
+  - Health check endpoint
+
+- **`yuque/user.ts`**: User operations (`UserService`)
+  - Get current user, user documents, user groups
+  
+- **`yuque/group.ts`**: Group management (`GroupService`)
+  - Group member CRUD operations
+  
+- **`yuque/repo.ts`**: Repository operations (`RepoService`)
+  - User and group repository management
+  - Repository CRUD operations
+  
+- **`yuque/document.ts`**: Document operations (`DocumentService`)
+  - Document CRUD with version management
+  - Filters out unnecessary content formats
+  
+- **`yuque/toc.ts`**: Table of contents (`TocService`)
+  - Repository TOC management
+  
+- **`yuque/search.ts`**: Search operations (`SearchService`)
+  - Document and repository search
+  
+- **`yuque/statistics.ts`**: Analytics (`StatisticsService`)
+  - Team, member, repository, and document statistics
+  
+- **`yuque/index.ts`**: Main `YuqueService` class
+  - Combines all sub-services
+  - Delegates method calls to appropriate services
+  - Maintains backward compatibility with previous monolithic design
 
 #### 4. `config.ts` - Configuration Management
 Uses Zod to validate environment variables:
@@ -126,15 +166,45 @@ GET /sse?accessToken=<token>&baseUrl=<url>
 
 ### Steps to Add New Tools
 
-1. **Add API method in `services/yuque.ts`**:
+1. **Choose or create appropriate service module in `services/yuque/`**:
+   - For user operations: `user.ts`
+   - For documents: `document.ts`
+   - For repositories: `repo.ts`
+   - For new functionality: create a new service file
+
+2. **Add API method in the service class**:
 ```typescript
-async newApiMethod(param: string): Promise<SomeType> {
-  const response = await this.client.get(`/endpoint/${param}`);
-  return response.data.data;
+// In services/yuque/your-service.ts
+import { YuqueClient } from './client';
+import { YourType } from '../types';
+
+export class YourService extends YuqueClient {
+  async newApiMethod(param: string): Promise<YourType> {
+    const response = await this.client.get(`/endpoint/${param}`);
+    return response.data.data;
+  }
 }
 ```
 
-2. **Register tool in `registerTools()` of `server.ts`**:
+3. **Add service to main YuqueService in `services/yuque/index.ts`**:
+```typescript
+import { YourService } from './your-service';
+
+export class YuqueService {
+  private yourService: YourService;
+  
+  constructor(apiToken: string = '', baseURL: string = 'https://www.yuque.com/api/v2') {
+    // ... other services
+    this.yourService = new YourService(apiToken, baseURL);
+  }
+  
+  async newApiMethod(param: string) {
+    return this.yourService.newApiMethod(param);
+  }
+}
+```
+
+4. **Register tool in `registerTools()` of `server.ts`**:
 ```typescript
 this.server.tool(
   "tool_name",

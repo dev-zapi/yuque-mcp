@@ -192,13 +192,30 @@ src/
   ├── index.ts           # 主入口点
   ├── cli.ts             # CLI 入口点 
   ├── server.ts          # MCP 服务器实现
+  ├── mcp_hook.ts        # MCP 协议钩子
   └── services/
-      └── yuque.ts       # 语雀 API 服务
+      ├── types.ts       # TypeScript 类型定义
+      ├── yuque.ts       # 向后兼容的导出
+      └── yuque/
+          ├── index.ts       # 主 YuqueService 集成
+          ├── client.ts      # 基础 HTTP 客户端
+          ├── user.ts        # 用户相关操作
+          ├── group.ts       # 团队管理
+          ├── repo.ts        # 知识库操作
+          ├── document.ts    # 文档 CRUD
+          ├── toc.ts         # 目录管理
+          ├── search.ts      # 搜索功能
+          └── statistics.ts  # 统计分析
 ```
 
 ### 添加新工具
 
-要添加新工具，请修改 `src/server.ts` 中的 `registerTools` 方法。
+要添加新工具：
+
+1. 在 `src/services/yuque/` 中选择或创建相应的服务模块
+2. 在服务类中添加 API 方法
+3. 在 `src/services/yuque/index.ts` 的 `YuqueService` 类中暴露该方法
+4. 在 `src/server.ts` 的 `registerTools` 方法中注册新工具
 
 ## API 改进
 
