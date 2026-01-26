@@ -41,9 +41,10 @@ export class YuqueMcpServer {
   }
 
   // 创建新的YuqueService实例的辅助方法
+  // 注意：使用 || 而不是 ?? ，因为空字符串也应该回退到环境变量的 token
   private createYuqueService(accessToken: string | undefined): YuqueService {
     return new YuqueService(
-      accessToken ?? this.yuqueApiToken,
+      accessToken || this.yuqueApiToken,
       this.yuqueApiBaseUrl
     );
   }

@@ -52,6 +52,10 @@ export function getFixedQuery(query: Record<string, string>) {
     for (const key in query) {
         if (query[key] && typeof query[key] === 'string') {
             const value = query[key];
+            // 跳过空字符串值，避免覆盖环境变量中的 token
+            if (value === '') {
+                continue;
+            }
             // if match ?sessionId= , then add sessionId to fixedQuery  
             if (value.match(/^[^?]+?\?sessionId=([^&]+)/)) {
                 fixedQuery[key] = value.split("?")[0];
