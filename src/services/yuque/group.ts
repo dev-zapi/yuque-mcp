@@ -1,16 +1,26 @@
-import { YuqueClient } from './client';
-import { YuqueGroupUser } from '../types';
+import { AxiosInstance } from "axios";
+import { BaseService } from "./client";
+import { YuqueGroupUser } from "../types";
+
+interface GroupMemberParams {
+  role?: number;
+  offset?: number;
+}
 
 /**
  * Group (Team) management operations
  */
-export class GroupService extends YuqueClient {
+export class GroupService extends BaseService {
+  constructor(client: AxiosInstance) {
+    super(client);
+  }
+
   // Get group members
   async getGroupMembers(login: string, role?: number, offset?: number): Promise<YuqueGroupUser[]> {
-    const params: any = {};
+    const params: GroupMemberParams = {};
     if (role !== undefined) params.role = role;
     if (offset !== undefined) params.offset = offset;
-    
+
     const response = await this.client.get(`/groups/${login}/users`, { params });
     return response.data.data;
   }

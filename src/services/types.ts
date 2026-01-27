@@ -111,7 +111,7 @@ export interface YuqueDocVersionDetail extends YuqueDocVersion {
 
 export interface YuqueTocItem {
   uuid: string;
-  type: 'DOC' | 'LINK' | 'TITLE';
+  type: "DOC" | "LINK" | "TITLE";
   title: string;
   url?: string;
   doc_id?: number;
@@ -126,7 +126,7 @@ export interface YuqueTocItem {
 
 export interface YuqueSearchResult {
   id: number;
-  type: 'doc' | 'repo';
+  type: "doc" | "repo";
   title: string;
   summary: string;
   url: string;
@@ -142,4 +142,96 @@ export interface YuqueTag {
   user_id: number;
   created_at: string;
   updated_at: string;
+}
+
+// Statistics Types
+
+/**
+ * Group summary statistics
+ */
+export interface YuqueGroupStatistics {
+  member_count: number;
+  doc_count: number;
+  word_count: number;
+  read_count: number;
+  like_count: number;
+  comment_count: number;
+}
+
+/**
+ * Individual member statistics within a group
+ */
+export interface YuqueMemberStatistics {
+  user: YuqueUser;
+  write_doc_count: number;
+  write_count: number;
+  read_count: number;
+  like_count: number;
+}
+
+/**
+ * Repository (Book) statistics
+ */
+export interface YuqueBookStatistics {
+  book: YuqueRepo;
+  content_updated_at_ms: number;
+  word_count: number;
+  post_count: number;
+  read_count: number;
+  like_count: number;
+  watch_count: number;
+  comment_count: number;
+}
+
+/**
+ * Document statistics
+ */
+export interface YuqueDocStatistics {
+  doc: YuqueDoc;
+  content_updated_at: string;
+  word_count: number;
+  read_count: number;
+  like_count: number;
+  comment_count: number;
+  created_at: string;
+}
+
+// Pagination Types
+
+/**
+ * Common pagination parameters
+ */
+export interface YuquePaginationParams {
+  offset?: number;
+  limit?: number;
+  page?: number;
+}
+
+/**
+ * Statistics query parameters
+ */
+export interface YuqueStatisticsQueryParams extends YuquePaginationParams {
+  name?: string;
+  range?: number;
+  sortField?: string;
+  sortOrder?: "desc" | "asc";
+}
+
+/**
+ * Document statistics query parameters (extends statistics params with bookId filter)
+ */
+export interface YuqueDocStatisticsQueryParams extends YuqueStatisticsQueryParams {
+  bookId?: number;
+}
+
+/**
+ * Paginated response wrapper
+ */
+export interface YuquePaginatedResponse<T> {
+  data: T[];
+  meta: {
+    total: number;
+    page: number;
+    limit: number;
+  };
 }

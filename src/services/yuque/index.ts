@@ -1,84 +1,98 @@
-import { YuqueClient } from './client';
-import { UserService } from './user';
-import { GroupService } from './group';
-import { RepoService } from './repo';
-import { DocumentService } from './document';
-import { TocService } from './toc';
-import { SearchService } from './search';
-import { StatisticsService } from './statistics';
+import { AxiosInstance } from "axios";
+import { createAxiosInstance, YuqueClient } from "./client";
+import { UserService } from "./user";
+import { GroupService } from "./group";
+import { RepoService } from "./repo";
+import { DocumentService } from "./document";
+import { TocService } from "./toc";
+import { SearchService } from "./search";
+import { StatisticsService } from "./statistics";
 
 /**
  * Main Yuque Service that combines all sub-services
+ * Uses a single shared Axios instance for all API calls
  */
 export class YuqueService {
-  private client: YuqueClient;
-  private userService: UserService;
-  private groupService: GroupService;
-  private repoService: RepoService;
-  private documentService: DocumentService;
-  private tocService: TocService;
-  private searchService: SearchService;
-  private statisticsService: StatisticsService;
+  private axiosInstance: AxiosInstance;
+  private legacyClient: YuqueClient;
+  public userService: UserService;
+  public groupService: GroupService;
+  public repoService: RepoService;
+  public documentService: DocumentService;
+  public tocService: TocService;
+  public searchService: SearchService;
+  public statisticsService: StatisticsService;
 
-  constructor(apiToken: string = '', baseURL: string = 'https://www.yuque.com/api/v2') {
-    // Initialize base client
-    this.client = new YuqueClient(apiToken, baseURL);
-    
-    // Initialize all sub-services
-    this.userService = new UserService(apiToken, baseURL);
-    this.groupService = new GroupService(apiToken, baseURL);
-    this.repoService = new RepoService(apiToken, baseURL);
-    this.documentService = new DocumentService(apiToken, baseURL);
-    this.tocService = new TocService(apiToken, baseURL);
-    this.searchService = new SearchService(apiToken, baseURL);
-    this.statisticsService = new StatisticsService(apiToken, baseURL);
+  constructor(apiToken: string = "", baseURL: string = "https://www.yuque.com/api/v2") {
+    // Create a single shared Axios instance
+    this.axiosInstance = createAxiosInstance(apiToken, baseURL);
+
+    // Keep legacy client for configuration methods
+    // We pass the axios instance to avoid creating a second one
+    this.legacyClient = new YuqueClient(this.axiosInstance, baseURL);
+
+    // Initialize all sub-services with the shared Axios instance
+    this.userService = new UserService(this.axiosInstance);
+    this.groupService = new GroupService(this.axiosInstance);
+    this.repoService = new RepoService(this.axiosInstance);
+    this.documentService = new DocumentService(this.axiosInstance);
+    this.tocService = new TocService(this.axiosInstance);
+    this.searchService = new SearchService(this.axiosInstance);
+    this.statisticsService = new StatisticsService(this.axiosInstance);
   }
 
   // Configuration methods
   getApiToken(): string {
-    return this.client.getApiToken();
+    return this.legacyClient.getApiToken();
   }
 
   getBaseUrl(): string {
-    return this.client.getBaseUrl();
+    return this.legacyClient.getBaseUrl();
   }
 
+  // Note: Token/URL updates now only need to update the legacy client
+  // since a new YuqueService instance should be created for different configs
   updateApiToken(newToken: string): void {
-    this.client.updateApiToken(newToken);
-    this.userService.updateApiToken(newToken);
-    this.groupService.updateApiToken(newToken);
-    this.repoService.updateApiToken(newToken);
-    this.documentService.updateApiToken(newToken);
-    this.tocService.updateApiToken(newToken);
-    this.searchService.updateApiToken(newToken);
-    this.statisticsService.updateApiToken(newToken);
+    // Recreate axios instance and all services
+    this.axiosInstance = createAxiosInstance(newToken, this.legacyClient.getBaseUrl());
+    this.reinitializeServices();
+    // Update legacy client wrapper
+    this.legacyClient = new YuqueClient(this.axiosInstance, this.legacyClient.getBaseUrl());
   }
 
   updateBaseUrl(newBaseUrl: string): void {
-    this.client.updateBaseUrl(newBaseUrl);
-    this.userService.updateBaseUrl(newBaseUrl);
-    this.groupService.updateBaseUrl(newBaseUrl);
-    this.repoService.updateBaseUrl(newBaseUrl);
-    this.documentService.updateBaseUrl(newBaseUrl);
-    this.tocService.updateBaseUrl(newBaseUrl);
-    this.searchService.updateBaseUrl(newBaseUrl);
-    this.statisticsService.updateBaseUrl(newBaseUrl);
+    // Recreate axios instance and all services
+    this.axiosInstance = createAxiosInstance(this.legacyClient.getApiToken(), newBaseUrl);
+    this.reinitializeServices();
+    // Update legacy client wrapper
+    this.legacyClient = new YuqueClient(this.axiosInstance, newBaseUrl);
   }
 
   updateConfig(newToken?: string, newBaseUrl?: string): void {
-    this.client.updateConfig(newToken, newBaseUrl);
-    this.userService.updateConfig(newToken, newBaseUrl);
-    this.groupService.updateConfig(newToken, newBaseUrl);
-    this.repoService.updateConfig(newToken, newBaseUrl);
-    this.documentService.updateConfig(newToken, newBaseUrl);
-    this.tocService.updateConfig(newToken, newBaseUrl);
-    this.searchService.updateConfig(newToken, newBaseUrl);
-    this.statisticsService.updateConfig(newToken, newBaseUrl);
+    const token = newToken || this.legacyClient.getApiToken();
+    const url = newBaseUrl || this.legacyClient.getBaseUrl();
+
+    // Recreate axios instance and all services
+    this.axiosInstance = createAxiosInstance(token, url);
+    this.reinitializeServices();
+
+    // Update legacy client wrapper
+    this.legacyClient = new YuqueClient(this.axiosInstance, url);
+  }
+
+  private reinitializeServices(): void {
+    this.userService = new UserService(this.axiosInstance);
+    this.groupService = new GroupService(this.axiosInstance);
+    this.repoService = new RepoService(this.axiosInstance);
+    this.documentService = new DocumentService(this.axiosInstance);
+    this.tocService = new TocService(this.axiosInstance);
+    this.searchService = new SearchService(this.axiosInstance);
+    this.statisticsService = new StatisticsService(this.axiosInstance);
   }
 
   // Health check
   async hello() {
-    return this.client.hello();
+    return this.legacyClient.hello();
   }
 
   // User methods
@@ -128,7 +142,14 @@ export class YuqueService {
     public_level: number = 0,
     enhancedPrivacy?: boolean
   ) {
-    return this.repoService.createRepo(login, name, slug, description, public_level, enhancedPrivacy);
+    return this.repoService.createRepo(
+      login,
+      name,
+      slug,
+      description,
+      public_level,
+      enhancedPrivacy
+    );
   }
 
   async createGroupRepo(
@@ -139,16 +160,26 @@ export class YuqueService {
     public_level: number = 0,
     enhancedPrivacy?: boolean
   ) {
-    return this.repoService.createGroupRepo(login, name, slug, description, public_level, enhancedPrivacy);
+    return this.repoService.createGroupRepo(
+      login,
+      name,
+      slug,
+      description,
+      public_level,
+      enhancedPrivacy
+    );
   }
 
-  async updateRepo(namespace: string, data: {
-    name?: string;
-    slug?: string;
-    description?: string;
-    public?: number;
-    toc?: string;
-  }) {
+  async updateRepo(
+    namespace: string,
+    data: {
+      name?: string;
+      slug?: string;
+      description?: string;
+      public?: number;
+      toc?: string;
+    }
+  ) {
     return this.repoService.updateRepo(namespace, data);
   }
 
@@ -175,7 +206,7 @@ export class YuqueService {
     title: string,
     slug: string,
     body: string,
-    format: string = 'markdown',
+    format: string = "markdown",
     public_level: number = 1
   ) {
     return this.documentService.createDoc(namespace, title, slug, body, format, public_level);
@@ -212,29 +243,26 @@ export class YuqueService {
     return this.tocService.getRepoToc(namespace);
   }
 
-  async updateRepoToc(namespace: string, data: {
-    action: 'appendNode' | 'prependNode' | 'editNode' | 'removeNode';
-    action_mode: 'sibling' | 'child';
-    target_uuid?: string;
-    node_uuid?: string;
-    doc_ids?: number[];
-    type?: 'DOC' | 'LINK' | 'TITLE';
-    title?: string;
-    url?: string;
-    open_window?: number;
-    visible?: number;
-  }) {
+  async updateRepoToc(
+    namespace: string,
+    data: {
+      action: "appendNode" | "prependNode" | "editNode" | "removeNode";
+      action_mode: "sibling" | "child";
+      target_uuid?: string;
+      node_uuid?: string;
+      doc_ids?: number[];
+      type?: "DOC" | "LINK" | "TITLE";
+      title?: string;
+      url?: string;
+      open_window?: number;
+      visible?: number;
+    }
+  ) {
     return this.tocService.updateRepoToc(namespace, data);
   }
 
   // Search methods
-  async search(
-    q: string,
-    type: 'doc' | 'repo',
-    scope?: string,
-    page?: number,
-    creator?: string
-  ) {
+  async search(q: string, type: "doc" | "repo", scope?: string, page?: number, creator?: string) {
     return this.searchService.search(q, type, scope, page, creator);
   }
 
@@ -243,40 +271,49 @@ export class YuqueService {
     return this.statisticsService.getGroupStatistics(login);
   }
 
-  async getGroupMemberStatistics(login: string, params?: {
-    name?: string;
-    range?: number;
-    page?: number;
-    limit?: number;
-    sortField?: string;
-    sortOrder?: 'desc' | 'asc';
-  }) {
+  async getGroupMemberStatistics(
+    login: string,
+    params?: {
+      name?: string;
+      range?: number;
+      page?: number;
+      limit?: number;
+      sortField?: string;
+      sortOrder?: "desc" | "asc";
+    }
+  ) {
     return this.statisticsService.getGroupMemberStatistics(login, params);
   }
 
-  async getGroupBookStatistics(login: string, params?: {
-    name?: string;
-    range?: number;
-    page?: number;
-    limit?: number;
-    sortField?: string;
-    sortOrder?: 'desc' | 'asc';
-  }) {
+  async getGroupBookStatistics(
+    login: string,
+    params?: {
+      name?: string;
+      range?: number;
+      page?: number;
+      limit?: number;
+      sortField?: string;
+      sortOrder?: "desc" | "asc";
+    }
+  ) {
     return this.statisticsService.getGroupBookStatistics(login, params);
   }
 
-  async getGroupDocStatistics(login: string, params?: {
-    bookId?: number;
-    name?: string;
-    range?: number;
-    page?: number;
-    limit?: number;
-    sortField?: string;
-    sortOrder?: 'desc' | 'asc';
-  }) {
+  async getGroupDocStatistics(
+    login: string,
+    params?: {
+      bookId?: number;
+      name?: string;
+      range?: number;
+      page?: number;
+      limit?: number;
+      sortField?: string;
+      sortOrder?: "desc" | "asc";
+    }
+  ) {
     return this.statisticsService.getGroupDocStatistics(login, params);
   }
 }
 
 // Re-export all types
-export * from '../types';
+export * from "../types";

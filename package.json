@@ -20,7 +20,14 @@
     "start:cli": "cross-env NODE_ENV=cli node dist/index.js",
     "start:http": "node dist/index.js",
     "dev": "cross-env NODE_ENV=development ts-node-dev --respawn src/index.ts",
-    "dev:cli": "cross-env NODE_ENV=development ts-node-dev --respawn src/index.ts --stdio"
+    "dev:cli": "cross-env NODE_ENV=development ts-node-dev --respawn src/index.ts --stdio",
+    "lint": "eslint src/**/*.ts",
+    "lint:fix": "eslint src/**/*.ts --fix",
+    "format": "prettier --write src/**/*.ts",
+    "format:check": "prettier --check src/**/*.ts",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage"
   },
   "keywords": [
     "yuque",
@@ -34,6 +41,7 @@
     "@modelcontextprotocol/sdk": "^1.6.1",
     "@types/content-type": "^1.1.8",
     "axios": "^1.8.1",
+    "axios-retry": "^4.5.0",
     "content-type": "^1.0.5",
     "cors": "^2.8.5",
     "cross-env": "^7.0.3",
@@ -43,11 +51,20 @@
     "zod": "^3.24.2"
   },
   "devDependencies": {
+    "@eslint/js": "^9.39.2",
     "@types/express": "^5.0.0",
     "@types/node": "^22.13.9",
+    "@typescript-eslint/eslint-plugin": "^8.54.0",
+    "@typescript-eslint/parser": "^8.54.0",
+    "@vitest/coverage-v8": "^4.0.18",
+    "eslint": "^9.39.2",
+    "eslint-config-prettier": "^10.1.8",
     "nodemon": "^3.1.9",
+    "prettier": "^3.8.1",
     "ts-node": "^10.9.2",
     "ts-node-dev": "^2.0.0",
-    "typescript": "^5.8.2"
+    "typescript": "^5.8.2",
+    "typescript-eslint": "^8.54.0",
+    "vitest": "^4.0.18"
   }
 }

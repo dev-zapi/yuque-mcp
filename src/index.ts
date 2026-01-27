@@ -38,5 +38,5 @@ if (require.main === module) {
   });
 }
 
-export * from './server';
-export * from './services/yuque';
+export * from "./server";
+export * from "./services/yuque";
