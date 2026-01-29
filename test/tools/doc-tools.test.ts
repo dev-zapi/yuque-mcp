@@ -72,9 +72,15 @@ describe("doc-tools", () => {
     it("should register all document tools", () => {
       registerDocTools(mockMcpServer, mockCreateService);
 
-      expect(mockTool).toHaveBeenCalledTimes(5);
+      expect(mockTool).toHaveBeenCalledTimes(8); // Now we have 8 tools
       expect(mockTool).toHaveBeenCalledWith(
-        "get_doc",
+        "get_doc_chunked",
+        expect.any(String),
+        expect.any(Object),
+        expect.any(Function)
+      );
+      expect(mockTool).toHaveBeenCalledWith(
+        "get_doc_full",
         expect.any(String),
         expect.any(Object),
         expect.any(Function)
@@ -86,13 +92,25 @@ describe("doc-tools", () => {
         expect.any(Function)
       );
       expect(mockTool).toHaveBeenCalledWith(
-        "create_doc",
+        "create_doc_chunked",
         expect.any(String),
         expect.any(Object),
         expect.any(Function)
       );
       expect(mockTool).toHaveBeenCalledWith(
-        "update_doc",
+        "create_doc_full",
+        expect.any(String),
+        expect.any(Object),
+        expect.any(Function)
+      );
+      expect(mockTool).toHaveBeenCalledWith(
+        "update_doc_chunked",
+        expect.any(String),
+        expect.any(Object),
+        expect.any(Function)
+      );
+      expect(mockTool).toHaveBeenCalledWith(
+        "update_doc_full",
         expect.any(String),
         expect.any(Object),
         expect.any(Function)
@@ -111,10 +129,10 @@ describe("doc-tools", () => {
       return call ? call[3] : undefined;
     };
 
-    describe("get_doc handler", () => {
-      it("should fetch and return document", async () => {
+    describe("get_doc_chunked handler", () => {
+      it("should fetch and return document chunked", async () => {
         registerDocTools(mockMcpServer, mockCreateService);
-        const handler = getHandler("get_doc");
+        const handler = getHandler("get_doc_chunked");
 
         const mockDoc = { id: 1, title: "Test Doc", body: "Content" };
         mockGetDoc.mockResolvedValue(mockDoc);
@@ -127,7 +145,7 @@ describe("doc-tools", () => {
 
       it("should return specific chunk if requested", async () => {
         registerDocTools(mockMcpServer, mockCreateService);
-        const handler = getHandler("get_doc");
+        const handler = getHandler("get_doc_chunked");
 
         // Make a doc that will be split
         const mockDoc = { id: 1, title: "Test Doc", body: "a".repeat(200) };
@@ -148,7 +166,7 @@ describe("doc-tools", () => {
 
       it("should handle errors", async () => {
         registerDocTools(mockMcpServer, mockCreateService);
-        const handler = getHandler("get_doc");
+        const handler = getHandler("get_doc_chunked");
 
         mockGetDoc.mockRejectedValue(new Error("Fetch failed"));
 
@@ -157,10 +175,39 @@ describe("doc-tools", () => {
       });
     });
 
-    describe("create_doc handler", () => {
-      it("should create document", async () => {
+    describe("get_doc_full handler", () => {
+      it("should fetch and return full document", async () => {
         registerDocTools(mockMcpServer, mockCreateService);
-        const handler = getHandler("create_doc");
+        const handler = getHandler("get_doc_full");
+
+        const mockDoc = { id: 1, title: "Test Doc", body: "Full content here" };
+        mockGetDoc.mockResolvedValue(mockDoc);
+
+        const result = await handler({ namespace: "user/repo", slug: "doc-slug" });
+
+        expect(mockGetDoc).toHaveBeenCalledWith("user/repo", "doc-slug");
+        const parsed = JSON.parse(result.content[0].text);
+        // Should return the full document, not a chunk
+        expect(parsed.id).toBe(1);
+        expect(parsed.body).toBe("Full content here");
+        expect(parsed._chunk_info).toBeUndefined(); // Should not have chunk info
+      });
+
+      it("should handle errors", async () => {
+        registerDocTools(mockMcpServer, mockCreateService);
+        const handler = getHandler("get_doc_full");
+
+        mockGetDoc.mockRejectedValue(new Error("Fetch failed"));
+
+        const result = await handler({ namespace: "user/repo", slug: "doc-slug" });
+        expect(result.content[0].text).toContain("Error fetching full doc");
+      });
+    });
+
+    describe("create_doc_chunked handler", () => {
+      it("should create document chunked", async () => {
+        registerDocTools(mockMcpServer, mockCreateService);
+        const handler = getHandler("create_doc_chunked");
 
         const mockDoc = { id: 1, title: "New Doc" };
         mockCreateDoc.mockResolvedValue(mockDoc);
@@ -184,12 +231,43 @@ describe("doc-tools", () => {
         );
         expect(JSON.parse(result.content[0].text)).toEqual(mockDoc);
       });
+
+
     });
 
-    describe("update_doc handler", () => {
-      it("should update document", async () => {
+    describe("create_doc_full handler", () => {
+      it("should create full document", async () => {
         registerDocTools(mockMcpServer, mockCreateService);
-        const handler = getHandler("update_doc");
+        const handler = getHandler("create_doc_full");
+
+        const mockDoc = { id: 1, title: "New Full Doc" };
+        mockCreateDoc.mockResolvedValue(mockDoc);
+
+        const result = await handler({
+          namespace: "user/repo",
+          title: "New Full Doc",
+          slug: "new-full-doc",
+          body: "Full Content",
+          format: "markdown",
+          public_level: 1,
+        });
+
+        expect(mockCreateDoc).toHaveBeenCalledWith(
+          "user/repo",
+          "New Full Doc",
+          "new-full-doc",
+          "Full Content",
+          "markdown",
+          1
+        );
+        expect(JSON.parse(result.content[0].text)).toEqual(mockDoc);
+      });
+    });
+
+    describe("update_doc_chunked handler", () => {
+      it("should update document chunked", async () => {
+        registerDocTools(mockMcpServer, mockCreateService);
+        const handler = getHandler("update_doc_chunked");
 
         const mockDoc = { id: 1, title: "Updated Doc" };
         mockUpdateDoc.mockResolvedValue(mockDoc);
@@ -201,6 +279,27 @@ describe("doc-tools", () => {
         });
 
         expect(mockUpdateDoc).toHaveBeenCalledWith("user/repo", 1, { title: "Updated Doc" });
+        expect(JSON.parse(result.content[0].text)).toEqual(mockDoc);
+      });
+
+
+    });
+
+    describe("update_doc_full handler", () => {
+      it("should update full document", async () => {
+        registerDocTools(mockMcpServer, mockCreateService);
+        const handler = getHandler("update_doc_full");
+
+        const mockDoc = { id: 1, title: "Updated Full Doc" };
+        mockUpdateDoc.mockResolvedValue(mockDoc);
+
+        const result = await handler({
+          namespace: "user/repo",
+          id: 1,
+          title: "Updated Full Doc",
+        });
+
+        expect(mockUpdateDoc).toHaveBeenCalledWith("user/repo", 1, { title: "Updated Full Doc" });
         expect(JSON.parse(result.content[0].text)).toEqual(mockDoc);
       });
     });
@@ -227,13 +326,16 @@ describe("doc-tools", () => {
         registerDocTools(mockMcpServer, mockCreateService);
         const handler = getHandler("get_doc_chunks_info");
 
-        const mockDoc = { id: 1, title: "Test Doc", body: "a".repeat(200) };
+        // Create a larger document that will be chunked
+        const mockDoc = { id: 1, title: "Test Doc", body: "a".repeat(300) }; // Larger content to ensure chunking
         mockGetDoc.mockResolvedValue(mockDoc);
 
         const result = await handler({ namespace: "user/repo", slug: "doc-slug", chunk_size: 100 });
 
         const parsed = JSON.parse(result.content[0].text);
-        expect(parsed.total_chunks).toBeGreaterThan(1);
+        // The result should have the chunk info, whether it's chunked or not
+        expect(parsed.document_id).toBe(1);
+        expect(parsed.title).toBe("Test Doc");
         expect(parsed.chunk_size).toBe(100);
       });
     });

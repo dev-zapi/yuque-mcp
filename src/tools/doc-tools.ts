@@ -93,10 +93,10 @@ export function splitDocumentContent(doc: YuqueDoc, chunkSize: number = 100000):
  * Register document-related tools
  */
 export function registerDocTools(server: McpServer, createService: ServiceFactory): void {
-  // Tool to get a specific document
+  // Tool to get a specific document with chunking support
   server.tool(
-    "get_doc",
-    "获取语雀中特定文档的详细内容，包括正文、修改历史和权限信息（支持分块处理大型文档）",
+    "get_doc_chunked",
+    "获取语雀中特定文档的详细内容，支持分块处理大型文档",
     {
       namespace: z.string().describe("知识库的命名空间，格式为 user/repo"),
       slug: z.string().describe("文档的唯一标识或短链接名称"),
@@ -163,6 +163,41 @@ export function registerDocTools(server: McpServer, createService: ServiceFactor
     }
   );
 
+  // Tool to get a full document without chunking
+  server.tool(
+    "get_doc_full",
+    "获取语雀中特定文档的完整内容，不进行分块处理",
+    {
+      namespace: z.string().describe("知识库的命名空间，格式为 user/repo"),
+      slug: z.string().describe("文档的唯一标识或短链接名称"),
+      accessToken: z.string().optional().describe("用于认证 API 请求的令牌"),
+    },
+    async ({
+      namespace,
+      slug,
+      accessToken,
+    }): Promise<ToolResponse> => {
+      try {
+        Logger.log(`Fetching full document ${slug} from repository: ${namespace}`);
+        const yuqueService = createService(accessToken);
+        const doc = await yuqueService.getDoc(namespace, slug);
+
+        Logger.log(
+          `Successfully fetched full document: ${doc.title}, content length: ${doc.body?.length || 0} chars`
+        );
+
+        return {
+          content: [{ type: "text", text: JSON.stringify(doc, null, 2) }],
+        };
+      } catch (error) {
+        Logger.error(`Error fetching full doc ${slug} from repo ${namespace}:`, error);
+        return {
+          content: [{ type: "text", text: `Error fetching full doc: ${error}` }],
+        };
+      }
+    }
+  );
+
   // Tool to get document chunks info
   server.tool(
     "get_doc_chunks_info",
@@ -209,7 +244,7 @@ export function registerDocTools(server: McpServer, createService: ServiceFactor
               approximate_start: startPosition,
               approximate_end: endPosition,
               approximate_length: endPosition - startPosition,
-              how_to_get: `使用 get_doc 工具，指定 chunk_index=${index}`,
+              how_to_get: `使用 get_doc_chunked 工具，指定 chunk_index=${index}`,
             };
           }),
         };
@@ -226,7 +261,7 @@ export function registerDocTools(server: McpServer, createService: ServiceFactor
               approximate_start: 0,
               approximate_end: fullDocString.length,
               approximate_length: fullDocString.length,
-              how_to_get: `使用 get_doc 工具，无需指定 chunk_index`,
+              how_to_get: `使用 get_doc_chunked 或 get_doc_full 工具`,
             },
           ];
         }
@@ -244,10 +279,10 @@ export function registerDocTools(server: McpServer, createService: ServiceFactor
     }
   );
 
-  // Tool to create a new document
+  // Tool to create a new document (chunked version with option for full document)
   server.tool(
-    "create_doc",
-    "在指定知识库中创建新的语雀文档，支持多种格式内容",
+    "create_doc_chunked",
+    "在指定知识库中创建新的语雀文档，支持多种格式内容（支持大型文档分块处理）",
     {
       namespace: z.string().describe("知识库的命名空间，格式为 user/repo"),
       title: z.string().describe("文档标题"),
@@ -297,10 +332,63 @@ export function registerDocTools(server: McpServer, createService: ServiceFactor
     }
   );
 
-  // Tool to update a document
+  // Tool to create a new document (full version)
   server.tool(
-    "update_doc",
-    "更新语雀中已存在的文档，可以修改标题、内容或权限设置",
+    "create_doc_full",
+    "在指定知识库中创建新的语雀文档，完整内容版本，不进行分块处理",
+    {
+      namespace: z.string().describe("知识库的命名空间，格式为 user/repo"),
+      title: z.string().describe("文档标题"),
+      slug: z.string().describe("文档的短链接名称，用于URL路径"),
+      body: z.string().describe("文档内容，支持Markdown格式"),
+      format: z
+        .string()
+        .optional()
+        .describe("内容格式，可选值：markdown、html、lake，默认为 markdown"),
+      public_level: z
+        .number()
+        .optional()
+        .describe("公开性，可选值：0(私密)、1(公开)、2(企业内公开)，默认为 1"),
+      accessToken: z.string().optional().describe("用于认证 API 请求的令牌"),
+    },
+    async ({
+      namespace,
+      title,
+      slug,
+      body,
+      format = "markdown",
+      public_level = 1,
+      accessToken,
+    }): Promise<ToolResponse> => {
+      try {
+        Logger.log(`Creating full document "${title}" in repository: ${namespace}`);
+        const yuqueService = createService(accessToken);
+        const doc = await yuqueService.createDoc(
+          namespace,
+          title,
+          slug,
+          body,
+          format,
+          public_level
+        );
+
+        Logger.log(`Successfully created full document: ${doc.title}`);
+        return {
+          content: [{ type: "text", text: JSON.stringify(doc, null, 2) }],
+        };
+      } catch (error) {
+        Logger.error(`Error creating full doc in repo ${namespace}:`, error);
+        return {
+          content: [{ type: "text", text: `Error creating full doc: ${error}` }],
+        };
+      }
+    }
+  );
+
+  // Tool to update a document (chunked version)
+  server.tool(
+    "update_doc_chunked",
+    "更新语雀中已存在的文档，支持分块处理大型文档",
     {
       namespace: z.string().describe("知识库的命名空间，格式为 user/repo"),
       id: z.number().describe("要更新的文档ID"),
@@ -347,6 +435,61 @@ export function registerDocTools(server: McpServer, createService: ServiceFactor
         Logger.error(`Error updating doc ${id} in repo ${namespace}:`, error);
         return {
           content: [{ type: "text", text: `Error updating doc: ${error}` }],
+        };
+      }
+    }
+  );
+
+  // Tool to update a document (full version)
+  server.tool(
+    "update_doc_full",
+    "更新语雀中已存在的文档，完整内容版本，不进行分块处理",
+    {
+      namespace: z.string().describe("知识库的命名空间，格式为 user/repo"),
+      id: z.number().describe("要更新的文档ID"),
+      title: z.string().optional().describe("文档的新标题"),
+      slug: z.string().optional().describe("文档的新短链接名称"),
+      body: z.string().optional().describe("文档的新内容，支持Markdown格式"),
+      public: z.number().optional().describe("文档的公开状态，0(私密)、1(公开)、2(企业内公开)"),
+      format: z.string().optional().describe("内容格式，可选值：markdown、html、lake"),
+      accessToken: z.string().optional().describe("用于认证 API 请求的令牌"),
+    },
+    async ({
+      namespace,
+      id,
+      title,
+      slug,
+      body,
+      public: publicLevel,
+      format,
+      accessToken,
+    }): Promise<ToolResponse> => {
+      try {
+        Logger.log(`Updating full document ${id} in repository: ${namespace}`);
+        const yuqueService = createService(accessToken);
+        const updateData: {
+          title?: string;
+          slug?: string;
+          body?: string;
+          public?: number;
+          format?: string;
+        } = {};
+        if (title !== undefined) updateData.title = title;
+        if (slug !== undefined) updateData.slug = slug;
+        if (body !== undefined) updateData.body = body;
+        if (publicLevel !== undefined) updateData.public = publicLevel;
+        if (format !== undefined) updateData.format = format;
+
+        const doc = await yuqueService.updateDoc(namespace, id, updateData);
+
+        Logger.log(`Successfully updated full document: ${doc.title}`);
+        return {
+          content: [{ type: "text", text: JSON.stringify(doc, null, 2) }],
+        };
+      } catch (error) {
+        Logger.error(`Error updating full doc ${id} in repo ${namespace}:`, error);
+        return {
+          content: [{ type: "text", text: `Error updating full doc: ${error}` }],
         };
       }
     }
