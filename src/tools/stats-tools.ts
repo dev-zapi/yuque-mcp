@@ -10,10 +10,15 @@ export function registerStatsTools(server: McpServer, createService: ServiceFact
   // Tool to get group statistics summary
   server.tool(
     "get_group_statistics",
-    "获取团队的汇总统计数据，包括成员人数、文档数量、阅读量和互动数据等",
+    "获取语雀团队的汇总统计数据，包括成员总数、文档总数、总阅读量、点赞数等核心指标。适合快速了解团队整体活跃度和内容规模。",
     {
-      login: z.string().describe("团队的登录名或唯一标识"),
-      accessToken: z.string().optional().describe("用于认证 API 请求的令牌"),
+      login: z
+        .string()
+        .describe("团队的登录名或ID。可在团队主页URL中找到，例如 yuque.com/my-team 中的 my-team"),
+      accessToken: z
+        .string()
+        .optional()
+        .describe("语雀 API 访问令牌。如不传，则使用环境变量配置的令牌"),
     },
     async ({ login, accessToken }): Promise<ToolResponse> => {
       try {
@@ -37,22 +42,33 @@ export function registerStatsTools(server: McpServer, createService: ServiceFact
   // Tool to get group member statistics
   server.tool(
     "get_group_member_statistics",
-    "获取团队成员的统计数据，包括各成员的编辑次数、阅读量、点赞量等",
+    "获取团队成员的详细统计数据，包括各成员的文档创建数、编辑次数、阅读量、点赞数等。支持按时间范围、排序方式筛选，便于分析成员活跃度和贡献度。",
     {
-      login: z.string().describe("团队的登录名或唯一标识"),
-      name: z.string().optional().describe("成员名称，用于过滤特定成员"),
-      range: z.number().optional().describe("时间范围（0: 全部, 30: 近30天, 365: 近一年）"),
-      page: z.number().optional().describe("页码，默认为1"),
-      limit: z.number().optional().describe("每页数量，默认为10，最大为20"),
+      login: z.string().describe("团队的登录名或ID。可在团队主页URL中找到"),
+      name: z
+        .string()
+        .optional()
+        .describe("成员名称筛选。传入成员用户名或昵称，仅返回匹配的成员统计"),
+      range: z
+        .number()
+        .optional()
+        .describe("统计时间范围：0=全部历史，30=近30天，365=近一年。默认全部"),
+      page: z.number().optional().describe("分页页码，从1开始。用于浏览大量成员，默认第1页"),
+      limit: z.number().optional().describe("每页返回数量，默认10条，最大20条"),
       sortField: z
         .string()
         .optional()
-        .describe("排序字段，可选值：write_doc_count、write_count、read_count、like_count"),
+        .describe(
+          "排序字段，可选：write_doc_count（发文数）、write_count（编辑次数）、read_count（阅读量）、like_count（点赞数）"
+        ),
       sortOrder: z
         .enum(["desc", "asc"])
         .optional()
-        .describe("排序方向，可选值：desc（降序）、asc（升序），默认为desc"),
-      accessToken: z.string().optional().describe("用于认证 API 请求的令牌"),
+        .describe("排序方向：desc=降序（从高到低，默认），asc=升序（从低到高）"),
+      accessToken: z
+        .string()
+        .optional()
+        .describe("语雀 API 访问令牌。如不传，则使用环境变量配置的令牌"),
     },
     async (params): Promise<ToolResponse> => {
       try {
@@ -77,24 +93,33 @@ export function registerStatsTools(server: McpServer, createService: ServiceFact
   // Tool to get group book/repository statistics
   server.tool(
     "get_group_book_statistics",
-    "获取团队知识库的统计数据，包括各知识库的文档数、字数、阅读量等",
+    "获取团队各知识库的详细统计数据，包括每个知识库的文档数量、总字数、阅读量、点赞数、关注数、评论数等。支持按名称筛选和多种排序方式。",
     {
-      login: z.string().describe("团队的登录名或唯一标识"),
-      name: z.string().optional().describe("知识库名称，用于过滤特定知识库"),
-      range: z.number().optional().describe("时间范围（0: 全部, 30: 近30天, 365: 近一年）"),
-      page: z.number().optional().describe("页码，默认为1"),
-      limit: z.number().optional().describe("每页数量，默认为10，最大为20"),
+      login: z.string().describe("团队的登录名或ID。可在团队主页URL中找到"),
+      name: z
+        .string()
+        .optional()
+        .describe("知识库名称筛选。传入知识库名称关键词，仅返回匹配的知识库统计"),
+      range: z
+        .number()
+        .optional()
+        .describe("统计时间范围：0=全部历史，30=近30天，365=近一年。默认全部"),
+      page: z.number().optional().describe("分页页码，从1开始。用于浏览大量知识库，默认第1页"),
+      limit: z.number().optional().describe("每页返回数量，默认10条，最大20条"),
       sortField: z
         .string()
         .optional()
         .describe(
-          "排序字段，可选值：content_updated_at_ms、word_count、post_count、read_count、like_count、watch_count、comment_count"
+          "排序字段，可选：content_updated_at_ms（更新时间）、word_count（字数）、post_count（文档数）、read_count（阅读量）、like_count（点赞数）、watch_count（关注数）、comment_count（评论数）"
         ),
       sortOrder: z
         .enum(["desc", "asc"])
         .optional()
-        .describe("排序方向，可选值：desc（降序）、asc（升序），默认为desc"),
-      accessToken: z.string().optional().describe("用于认证 API 请求的令牌"),
+        .describe("排序方向：desc=降序（从高到低，默认），asc=升序（从低到高）"),
+      accessToken: z
+        .string()
+        .optional()
+        .describe("语雀 API 访问令牌。如不传，则使用环境变量配置的令牌"),
     },
     async (params): Promise<ToolResponse> => {
       try {
@@ -119,25 +144,37 @@ export function registerStatsTools(server: McpServer, createService: ServiceFact
   // Tool to get group document statistics
   server.tool(
     "get_group_doc_statistics",
-    "获取团队文档的统计数据，包括各文档的字数、阅读量、评论量等",
+    "获取团队文档的详细统计数据，包括各文档的字数、阅读量、点赞数、评论数、创建时间等。支持按知识库、文档名称筛选和多种排序方式，便于发现热门文档或分析内容表现。",
     {
-      login: z.string().describe("团队的登录名或唯一标识"),
-      bookId: z.number().optional().describe("知识库ID，用于过滤特定知识库的文档"),
-      name: z.string().optional().describe("文档名称，用于过滤特定文档"),
-      range: z.number().optional().describe("时间范围（0: 全部, 30: 近30天, 365: 近一年）"),
-      page: z.number().optional().describe("页码，默认为1"),
-      limit: z.number().optional().describe("每页数量，默认为10，最大为20"),
+      login: z.string().describe("团队的登录名或ID。可在团队主页URL中找到"),
+      bookId: z
+        .number()
+        .optional()
+        .describe("知识库ID筛选。传入知识库ID，仅返回该知识库下的文档统计"),
+      name: z
+        .string()
+        .optional()
+        .describe("文档名称筛选。传入文档标题关键词，仅返回匹配的文档统计"),
+      range: z
+        .number()
+        .optional()
+        .describe("统计时间范围：0=全部历史，30=近30天，365=近一年。默认全部"),
+      page: z.number().optional().describe("分页页码，从1开始。用于浏览大量文档，默认第1页"),
+      limit: z.number().optional().describe("每页返回数量，默认10条，最大20条"),
       sortField: z
         .string()
         .optional()
         .describe(
-          "排序字段，可选值：content_updated_at、word_count、read_count、like_count、comment_count、created_at"
+          "排序字段，可选：content_updated_at（更新时间）、word_count（字数）、read_count（阅读量）、like_count（点赞数）、comment_count（评论数）、created_at（创建时间）"
         ),
       sortOrder: z
         .enum(["desc", "asc"])
         .optional()
-        .describe("排序方向，可选值：desc（降序）、asc（升序），默认为desc"),
-      accessToken: z.string().optional().describe("用于认证 API 请求的令牌"),
+        .describe("排序方向：desc=降序（从高到低，默认），asc=升序（从低到高）"),
+      accessToken: z
+        .string()
+        .optional()
+        .describe("语雀 API 访问令牌。如不传，则使用环境变量配置的令牌"),
     },
     async (params): Promise<ToolResponse> => {
       try {

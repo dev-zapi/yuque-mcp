@@ -10,10 +10,15 @@ export function registerRepoTools(server: McpServer, createService: ServiceFacto
   // Tool to get user's repos
   server.tool(
     "get_user_repos",
-    "获取指定用户的知识库列表，知识库是语雀中组织文档的集合",
+    "获取指定用户的所有知识库（文档库）列表。知识库是语雀中组织文档的容器，每个知识库包含多篇文档。获取后可用于进一步获取库内文档列表。",
     {
-      login: z.string().describe("用户的登录名或唯一标识"),
-      accessToken: z.string().optional().describe("用于认证 API 请求的令牌"),
+      login: z
+        .string()
+        .describe("用户的登录名或ID。可在语雀个人主页URL中找到，例如 yuque.com/john 中的 john"),
+      accessToken: z
+        .string()
+        .optional()
+        .describe("语雀 API 访问令牌。如不传，则使用环境变量配置的令牌"),
     },
     async ({ login, accessToken }): Promise<ToolResponse> => {
       try {
@@ -37,10 +42,15 @@ export function registerRepoTools(server: McpServer, createService: ServiceFacto
   // Tool to get docs in a repo
   server.tool(
     "get_repo_docs",
-    "获取特定知识库中的所有文档列表，包括文档标题、更新时间等信息",
+    "获取指定知识库中的所有文档列表，包含文档标题、ID、更新时间、作者等信息。获取文档ID后可用于获取文档详情或更新/删除文档。",
     {
-      namespace: z.string().describe("知识库的命名空间，格式为 user/repo"),
-      accessToken: z.string().optional().describe("用于认证 API 请求的令牌"),
+      namespace: z
+        .string()
+        .describe("知识库命名空间，格式：user/repo 或 group/repo。例如：john/my-notes"),
+      accessToken: z
+        .string()
+        .optional()
+        .describe("语雀 API 访问令牌。如不传，则使用环境变量配置的令牌"),
     },
     async ({ namespace, accessToken }): Promise<ToolResponse> => {
       try {

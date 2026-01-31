@@ -9,6 +9,8 @@ import {
   mcpHook_updateMessageEndpoint,
 } from "./mcp_hook";
 import { registerAllTools, displayAvailableTools } from "./tools";
+import { registerAllPrompts, displayAvailablePrompts } from "./prompts";
+import { registerAllResources, displayAvailableResources } from "./resources";
 
 // Logger with timestamp - defaults to console, switches to MCP logging after connect
 export const Logger = {
@@ -34,11 +36,20 @@ export class YuqueMcpServer {
         capabilities: {
           logging: {},
           tools: {},
+          prompts: {
+            listChanged: true,
+          },
+          resources: {
+            subscribe: true,
+            listChanged: true,
+          },
         },
       }
     );
 
     this.registerTools();
+    this.registerPrompts();
+    this.registerResources();
   }
 
   /**
@@ -54,6 +65,20 @@ export class YuqueMcpServer {
    */
   private registerTools(): void {
     registerAllTools(this.server, (accessToken) => this.createYuqueService(accessToken));
+  }
+
+  /**
+   * Register all MCP prompts using modular prompt registration
+   */
+  private registerPrompts(): void {
+    registerAllPrompts(this.server, (accessToken) => this.createYuqueService(accessToken));
+  }
+
+  /**
+   * Register all MCP resources using modular resource registration
+   */
+  private registerResources(): void {
+    registerAllResources(this.server, (accessToken) => this.createYuqueService(accessToken));
   }
 
   async connect(transport: Transport): Promise<void> {
@@ -81,6 +106,8 @@ export class YuqueMcpServer {
    */
   displayAvailableTools(): void {
     displayAvailableTools();
+    displayAvailablePrompts();
+    displayAvailableResources();
   }
 
   async startHttpServer(port: number): Promise<void> {

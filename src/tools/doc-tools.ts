@@ -96,16 +96,26 @@ export function registerDocTools(server: McpServer, createService: ServiceFactor
   // Tool to get a specific document with chunking support
   server.tool(
     "get_doc_chunked",
-    "获取语雀中特定文档的详细内容，支持分块处理大型文档",
+    "获取语雀文档内容（分块版本）。适用于大型文档，可将内容分块获取以避免响应过大。先使用 get_doc_chunks_info 查看文档分块信息，再按需获取特定块。",
     {
-      namespace: z.string().describe("知识库的命名空间，格式为 user/repo"),
-      slug: z.string().describe("文档的唯一标识或短链接名称"),
+      namespace: z
+        .string()
+        .describe("知识库命名空间，格式：user/repo 或 group/repo。例如：john/my-notes"),
+      slug: z
+        .string()
+        .describe("文档的唯一标识（短链接名称），通常是文档URL的最后一部分。例如：getting-started"),
       chunk_index: z
         .number()
         .optional()
-        .describe("要获取的文档块索引，不提供则返回第一块或全部（如果内容较小）"),
-      chunk_size: z.number().optional().describe("分块大小（字符数），默认为100000"),
-      accessToken: z.string().optional().describe("用于认证 API 请求的令牌"),
+        .describe("要获取的块索引（从0开始）。不指定则返回第一块，或当文档较小时返回完整内容"),
+      chunk_size: z
+        .number()
+        .optional()
+        .describe("分块大小（字符数），默认100000。仅在首次获取时生效，后续应使用相同的分块大小"),
+      accessToken: z
+        .string()
+        .optional()
+        .describe("语雀 API 访问令牌。如不传，则使用环境变量配置的令牌"),
     },
     async ({
       namespace,
@@ -166,17 +176,20 @@ export function registerDocTools(server: McpServer, createService: ServiceFactor
   // Tool to get a full document without chunking
   server.tool(
     "get_doc_full",
-    "获取语雀中特定文档的完整内容，不进行分块处理",
+    "获取语雀文档完整内容（不分块）。适合内容较小的文档一次性获取。如果文档很大可能导致响应超时，此时请使用 get_doc_chunked 分块获取。",
     {
-      namespace: z.string().describe("知识库的命名空间，格式为 user/repo"),
-      slug: z.string().describe("文档的唯一标识或短链接名称"),
-      accessToken: z.string().optional().describe("用于认证 API 请求的令牌"),
+      namespace: z
+        .string()
+        .describe("知识库命名空间，格式：user/repo 或 group/repo。例如：john/my-notes"),
+      slug: z
+        .string()
+        .describe("文档的唯一标识（短链接名称），通常是文档URL的最后一部分。例如：getting-started"),
+      accessToken: z
+        .string()
+        .optional()
+        .describe("语雀 API 访问令牌。如不传，则使用环境变量配置的令牌"),
     },
-    async ({
-      namespace,
-      slug,
-      accessToken,
-    }): Promise<ToolResponse> => {
+    async ({ namespace, slug, accessToken }): Promise<ToolResponse> => {
       try {
         Logger.log(`Fetching full document ${slug} from repository: ${namespace}`);
         const yuqueService = createService(accessToken);
@@ -201,12 +214,22 @@ export function registerDocTools(server: McpServer, createService: ServiceFactor
   // Tool to get document chunks info
   server.tool(
     "get_doc_chunks_info",
-    "获取文档的分块元信息，包括总块数、每块的字符数等",
+    "获取语雀文档的分块信息。在使用 get_doc_chunked 获取大型文档前，先用此工具查看文档总大小、分块数量及每块范围，便于规划分块获取策略。",
     {
-      namespace: z.string().describe("知识库的命名空间，格式为 user/repo"),
-      slug: z.string().describe("文档的唯一标识或短链接名称"),
-      chunk_size: z.number().optional().describe("分块大小（字符数），默认为100000"),
-      accessToken: z.string().optional().describe("用于认证 API 请求的令牌"),
+      namespace: z
+        .string()
+        .describe("知识库命名空间，格式：user/repo 或 group/repo。例如：john/my-notes"),
+      slug: z
+        .string()
+        .describe("文档的唯一标识（短链接名称），通常是文档URL的最后一部分。例如：getting-started"),
+      chunk_size: z
+        .number()
+        .optional()
+        .describe("计划使用的分块大小（字符数），默认100000。返回的分块信息将基于此大小计算"),
+      accessToken: z
+        .string()
+        .optional()
+        .describe("语雀 API 访问令牌。如不传，则使用环境变量配置的令牌"),
     },
     async ({ namespace, slug, chunk_size = 100000, accessToken }): Promise<ToolResponse> => {
       try {
@@ -282,21 +305,34 @@ export function registerDocTools(server: McpServer, createService: ServiceFactor
   // Tool to create a new document (chunked version with option for full document)
   server.tool(
     "create_doc_chunked",
-    "在指定知识库中创建新的语雀文档，支持多种格式内容（支持大型文档分块处理）",
+    "在语雀知识库中创建新文档（分块处理版本）。用于创建内容可能较大的文档。创建成功后返回文档元数据。",
     {
-      namespace: z.string().describe("知识库的命名空间，格式为 user/repo"),
-      title: z.string().describe("文档标题"),
-      slug: z.string().describe("文档的短链接名称，用于URL路径"),
-      body: z.string().describe("文档内容，支持Markdown格式"),
+      namespace: z
+        .string()
+        .describe("知识库命名空间，格式：user/repo 或 group/repo。例如：john/my-notes"),
+      title: z.string().describe("文档标题，将显示在文档列表和页面顶部"),
+      slug: z
+        .string()
+        .describe(
+          "文档短链接名称，用于构建URL。只能包含字母、数字、连字符和下划线。例如：getting-started"
+        ),
+      body: z
+        .string()
+        .describe("文档正文内容，支持 Markdown 格式。可包含标题、列表、代码块、表格等"),
       format: z
         .string()
         .optional()
-        .describe("内容格式，可选值：markdown、html、lake，默认为 markdown"),
+        .describe("内容格式，可选：markdown（默认）、html、lake。markdown 最常用"),
       public_level: z
         .number()
         .optional()
-        .describe("公开性，可选值：0(私密)、1(公开)、2(企业内公开)，默认为 1"),
-      accessToken: z.string().optional().describe("用于认证 API 请求的令牌"),
+        .describe(
+          "文档可见性：0=私密（仅自己可见），1=公开（所有人可见，默认），2=企业内公开（仅企业成员可见）"
+        ),
+      accessToken: z
+        .string()
+        .optional()
+        .describe("语雀 API 访问令牌。如不传，则使用环境变量配置的令牌"),
     },
     async ({
       namespace,
@@ -335,21 +371,34 @@ export function registerDocTools(server: McpServer, createService: ServiceFactor
   // Tool to create a new document (full version)
   server.tool(
     "create_doc_full",
-    "在指定知识库中创建新的语雀文档，完整内容版本，不进行分块处理",
+    "在语雀知识库中创建新文档（完整版本）。适合创建内容较小的文档。内容较大时建议使用 create_doc_chunked。",
     {
-      namespace: z.string().describe("知识库的命名空间，格式为 user/repo"),
-      title: z.string().describe("文档标题"),
-      slug: z.string().describe("文档的短链接名称，用于URL路径"),
-      body: z.string().describe("文档内容，支持Markdown格式"),
+      namespace: z
+        .string()
+        .describe("知识库命名空间，格式：user/repo 或 group/repo。例如：john/my-notes"),
+      title: z.string().describe("文档标题，将显示在文档列表和页面顶部"),
+      slug: z
+        .string()
+        .describe(
+          "文档短链接名称，用于构建URL。只能包含字母、数字、连字符和下划线。例如：getting-started"
+        ),
+      body: z
+        .string()
+        .describe("文档正文内容，支持 Markdown 格式。可包含标题、列表、代码块、表格等"),
       format: z
         .string()
         .optional()
-        .describe("内容格式，可选值：markdown、html、lake，默认为 markdown"),
+        .describe("内容格式，可选：markdown（默认）、html、lake。markdown 最常用"),
       public_level: z
         .number()
         .optional()
-        .describe("公开性，可选值：0(私密)、1(公开)、2(企业内公开)，默认为 1"),
-      accessToken: z.string().optional().describe("用于认证 API 请求的令牌"),
+        .describe(
+          "文档可见性：0=私密（仅自己可见），1=公开（所有人可见，默认），2=企业内公开（仅企业成员可见）"
+        ),
+      accessToken: z
+        .string()
+        .optional()
+        .describe("语雀 API 访问令牌。如不传，则使用环境变量配置的令牌"),
     },
     async ({
       namespace,
@@ -388,16 +437,27 @@ export function registerDocTools(server: McpServer, createService: ServiceFactor
   // Tool to update a document (chunked version)
   server.tool(
     "update_doc_chunked",
-    "更新语雀中已存在的文档，支持分块处理大型文档",
+    "更新语雀已有文档（分块版本）。可更新标题、内容、可见性等。只需传入需要修改的字段，未传入的字段保持不变。",
     {
-      namespace: z.string().describe("知识库的命名空间，格式为 user/repo"),
-      id: z.number().describe("要更新的文档ID"),
-      title: z.string().optional().describe("文档的新标题"),
-      slug: z.string().optional().describe("文档的新短链接名称"),
-      body: z.string().optional().describe("文档的新内容，支持Markdown格式"),
-      public: z.number().optional().describe("文档的公开状态，0(私密)、1(公开)、2(企业内公开)"),
-      format: z.string().optional().describe("内容格式，可选值：markdown、html、lake"),
-      accessToken: z.string().optional().describe("用于认证 API 请求的令牌"),
+      namespace: z
+        .string()
+        .describe("知识库命名空间，格式：user/repo 或 group/repo。例如：john/my-notes"),
+      id: z.number().describe("要更新的文档ID。可通过 get_repo_docs 获取文档列表查看ID"),
+      title: z.string().optional().describe("新文档标题。不传则保持原标题不变"),
+      slug: z.string().optional().describe("新短链接名称。修改后文档URL将改变，原URL会失效"),
+      body: z.string().optional().describe("新文档内容，支持 Markdown 格式。不传则保持原内容不变"),
+      public: z
+        .number()
+        .optional()
+        .describe("新可见性：0=私密，1=公开，2=企业内公开。不传则保持不变"),
+      format: z
+        .string()
+        .optional()
+        .describe("内容格式，可选：markdown、html、lake。不传则保持原格式"),
+      accessToken: z
+        .string()
+        .optional()
+        .describe("语雀 API 访问令牌。如不传，则使用环境变量配置的令牌"),
     },
     async ({
       namespace,
@@ -443,16 +503,27 @@ export function registerDocTools(server: McpServer, createService: ServiceFactor
   // Tool to update a document (full version)
   server.tool(
     "update_doc_full",
-    "更新语雀中已存在的文档，完整内容版本，不进行分块处理",
+    "更新语雀已有文档（完整版本）。适合更新内容较小的文档。可更新标题、内容、可见性等，只需传入需要修改的字段。",
     {
-      namespace: z.string().describe("知识库的命名空间，格式为 user/repo"),
-      id: z.number().describe("要更新的文档ID"),
-      title: z.string().optional().describe("文档的新标题"),
-      slug: z.string().optional().describe("文档的新短链接名称"),
-      body: z.string().optional().describe("文档的新内容，支持Markdown格式"),
-      public: z.number().optional().describe("文档的公开状态，0(私密)、1(公开)、2(企业内公开)"),
-      format: z.string().optional().describe("内容格式，可选值：markdown、html、lake"),
-      accessToken: z.string().optional().describe("用于认证 API 请求的令牌"),
+      namespace: z
+        .string()
+        .describe("知识库命名空间，格式：user/repo 或 group/repo。例如：john/my-notes"),
+      id: z.number().describe("要更新的文档ID。可通过 get_repo_docs 获取文档列表查看ID"),
+      title: z.string().optional().describe("新文档标题。不传则保持原标题不变"),
+      slug: z.string().optional().describe("新短链接名称。修改后文档URL将改变，原URL会失效"),
+      body: z.string().optional().describe("新文档内容，支持 Markdown 格式。不传则保持原内容不变"),
+      public: z
+        .number()
+        .optional()
+        .describe("新可见性：0=私密，1=公开，2=企业内公开。不传则保持不变"),
+      format: z
+        .string()
+        .optional()
+        .describe("内容格式，可选：markdown、html、lake。不传则保持原格式"),
+      accessToken: z
+        .string()
+        .optional()
+        .describe("语雀 API 访问令牌。如不传，则使用环境变量配置的令牌"),
     },
     async ({
       namespace,
@@ -498,11 +569,16 @@ export function registerDocTools(server: McpServer, createService: ServiceFactor
   // Tool to delete a document
   server.tool(
     "delete_doc",
-    "从语雀知识库中删除指定文档，此操作不可撤销",
+    "从语雀知识库中永久删除指定文档。警告：此操作不可撤销，删除后文档无法恢复。请确认文档ID正确后再执行。",
     {
-      namespace: z.string().describe("知识库的命名空间，格式为 user/repo"),
-      id: z.number().describe("要删除的文档ID"),
-      accessToken: z.string().optional().describe("用于认证 API 请求的令牌"),
+      namespace: z
+        .string()
+        .describe("知识库命名空间，格式：user/repo 或 group/repo。例如：john/my-notes"),
+      id: z.number().describe("要删除的文档ID。可通过 get_repo_docs 获取文档列表查看ID"),
+      accessToken: z
+        .string()
+        .optional()
+        .describe("语雀 API 访问令牌。如不传，则使用环境变量配置的令牌"),
     },
     async ({ namespace, id, accessToken }): Promise<ToolResponse> => {
       try {

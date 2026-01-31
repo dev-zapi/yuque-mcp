@@ -10,9 +10,12 @@ export function registerUserTools(server: McpServer, createService: ServiceFacto
   // Tool to get current user information
   server.tool(
     "get_current_user",
-    "获取当前认证用户的信息，包括用户ID、用户名、头像等语雀账号基本信息",
+    "获取当前登录用户的语雀账号信息，包括用户ID、用户名、头像、邮箱等基本信息。用于确认当前身份或获取用户ID用于其他操作。",
     {
-      accessToken: z.string().optional().describe("用于认证 API 请求的令牌"),
+      accessToken: z
+        .string()
+        .optional()
+        .describe("语雀 API 访问令牌。如不传，则使用环境变量配置的令牌"),
     },
     async ({ accessToken }): Promise<ToolResponse> => {
       try {
@@ -36,9 +39,12 @@ export function registerUserTools(server: McpServer, createService: ServiceFacto
   // Tool to get user's docs
   server.tool(
     "get_user_docs",
-    "获取当前用户的所有知识库文档列表，包括私人和协作文档",
+    "获取当前用户创建或参与的所有文档列表，包括个人知识库中的文档和协作知识库中的文档。返回文档标题、ID、所属知识库、更新时间等信息。",
     {
-      accessToken: z.string().optional().describe("用于认证 API 请求的令牌"),
+      accessToken: z
+        .string()
+        .optional()
+        .describe("语雀 API 访问令牌。如不传，则使用环境变量配置的令牌"),
     },
     async ({ accessToken }): Promise<ToolResponse> => {
       try {
