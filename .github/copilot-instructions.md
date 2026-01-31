@@ -5,11 +5,13 @@
 This is a Yuque API integration server based on Model Context Protocol (MCP), allowing AI models to interact with the Yuque knowledge base platform through a standardized protocol. The project is developed in TypeScript and supports both stdio and HTTP running modes.
 
 ### Core Features
-- **Document Management**: Create, read, update, and delete Yuque documents
+- **Document Management**: Create, read, update, and delete Yuque documents (with chunking support for large documents)
 - **Repository Operations**: Get user and team repository information
 - **Search Functionality**: Search content within the Yuque platform
 - **Statistical Analysis**: Get statistics for teams, members, repositories, and documents
 - **User Information**: Retrieve current user and other users' detailed information
+- **MCP Prompts**: Pre-defined prompts for document analysis, writing assistance, and knowledge base management
+- **MCP Resources**: Static resources and dynamic resource templates for accessing Yuque content
 
 ### Tech Stack
 - **Runtime**: Node.js 18+
@@ -18,7 +20,8 @@ This is a Yuque API integration server based on Model Context Protocol (MCP), al
   - `@modelcontextprotocol/sdk` - MCP protocol implementation
   - `express` - HTTP server
   - `axios` - HTTP client
-  - `zod` - Data validation
+  - `zod` - Data validation and runtime type checking
+- **Testing**: Vitest (test framework)
 - **Development Tools**: ts-node-dev, nodemon
 - **Deployment**: Docker + Docker Compose
 
@@ -27,24 +30,40 @@ This is a Yuque API integration server based on Model Context Protocol (MCP), al
 ### Directory Structure
 ```
 src/
-  ├── index.ts           # Main entry point, handles server startup mode (stdio/HTTP)
-  ├── cli.ts             # CLI mode entry point
-  ├── server.ts          # MCP server core implementation, registers all tools
-  ├── config.ts          # Configuration management, reads environment variables
-  ├── mcp_hook.ts        # MCP protocol hooks, handles query parameters and message body
+  ├── index.ts              # Main entry point, handles server startup mode (stdio/HTTP)
+  ├── cli.ts                # CLI mode entry point (shebang script)
+  ├── server.ts             # MCP server core implementation, registers tools/prompts/resources
+  ├── config.ts             # Configuration management with Zod validation
+  ├── mcp_hook.ts           # MCP protocol hooks, handles query parameters and message body
+  ├── tools/                # Modular tool registration
+  │   ├── index.ts          # Tool registration coordinator, AVAILABLE_TOOLS list
+  │   ├── types.ts          # Tool-related type definitions (ServiceFactory, ToolResponse, etc.)
+  │   ├── user-tools.ts     # User-related MCP tools (get_current_user, get_user_docs)
+  │   ├── repo-tools.ts     # Repository-related tools (get_user_repos, get_repo_docs)
+  │   ├── doc-tools.ts      # Document CRUD tools with chunking support
+  │   ├── search-tools.ts   # Search functionality
+  │   └── stats-tools.ts    # Team statistics and analytics
+  ├── prompts/              # MCP prompts
+  │   └── index.ts          # Pre-defined prompts for document operations
+  ├── resources/            # MCP resources
+  │   └── index.ts          # Static resources and dynamic resource templates
   └── services/
-      ├── types.ts       # TypeScript type definitions for all Yuque entities
-      ├── yuque.ts       # Backward compatible exports
+      ├── types.ts          # TypeScript type definitions for all Yuque entities
+      ├── yuque.ts          # Backward compatible exports
       └── yuque/
-          ├── index.ts       # Main YuqueService that combines all sub-services
-          ├── client.ts      # Base HTTP client with authentication
-          ├── user.ts        # User-related operations
-          ├── group.ts       # Group/team management operations
-          ├── repo.ts        # Repository (Book) operations
-          ├── document.ts    # Document CRUD operations
-          ├── toc.ts         # Table of contents management
-          ├── search.ts      # Search functionality
-          └── statistics.ts  # Analytics and statistics operations
+          ├── index.ts      # Main YuqueService (facade pattern, shared Axios instance)
+          ├── client.ts     # Base HTTP client with authentication
+          ├── user.ts       # UserService - User-related operations
+          ├── group.ts      # GroupService - Group/team management
+          ├── repo.ts       # RepoService - Repository (Book) operations
+          ├── document.ts   # DocumentService - Document CRUD operations
+          ├── toc.ts        # TocService - Table of contents management
+          ├── search.ts     # SearchService - Search functionality
+          └── statistics.ts # StatisticsService - Analytics operations
+
+test/                       # Test files (Vitest)
+  ├── services/             # Service layer tests
+  └── tools/                # Tool registration tests
 ```
 
 ### Core Component Descriptions
@@ -56,90 +75,138 @@ src/
 
 #### 2. `server.ts` - YuqueMcpServer Class
 **Main Responsibilities**:
-- Initialize MCP server instance
-- Register all Yuque-related tools
+- Initialize MCP server instance with capabilities (logging, tools, prompts, resources)
+- Register all Yuque-related tools, prompts, and resources via modular registration
 - Provide HTTP and SSE (Server-Sent Events) endpoints
-- Handle document content chunking (prevent oversized responses)
+- Handle logging through MCP logging protocol
 
 **Key Methods**:
-- `registerTools()` - Register all MCP tools
-- `createYuqueService()` - Create Yuque service instance
-- `splitDocumentContent()` - Split large documents into chunks
-- `startHttpServer()` - Start HTTP server
+- `registerTools()` - Register all MCP tools via `registerAllTools()`
+- `registerPrompts()` - Register all MCP prompts via `registerAllPrompts()`
+- `registerResources()` - Register all MCP resources via `registerAllResources()`
+- `createYuqueService()` - Create Yuque service instance with optional access token override
+- `startHttpServer()` - Start HTTP server with health check endpoint
 - `connect()` - Connect stdio transport layer
 
-**Tool Categories**:
-1. **User and Document Management**:
-   - `get_current_user` - Get current user information
-   - `get_user_docs` - Get user document list
-   - `get_user_repos` - Get user repositories
-   - `get_repo_docs` - Get documents in a repository
-   - `get_doc` - Get document details
-   - `create_doc` - Create new document
-   - `update_doc` - Update document
-   - `delete_doc` - Delete document
-   - `search` - Search content
+#### 3. `tools/` - Modular Tool Registration
 
-2. **Team Statistics and Analytics**:
-   - `get_group_statistics` - Team summary statistics
-   - `get_group_member_statistics` - Member statistics
-   - `get_group_book_statistics` - Repository statistics
-   - `get_group_doc_statistics` - Document statistics
+**Tool Organization**:
+- **`index.ts`**: Coordinates all tool registration, exports AVAILABLE_TOOLS list
+- **`types.ts`**: Type definitions including `ServiceFactory`, `ToolResponse`, `DocChunk`, `ChunkInfo`
+- **`user-tools.ts`**: 
+  - `get_current_user` - Get current user information
+  - `get_user_docs` - Get user document list
+- **`repo-tools.ts`**:
+  - `get_user_repos` - Get user repositories
+  - `get_repo_docs` - Get documents in a repository
+- **`doc-tools.ts`** (with chunking support):
+  - `get_doc_chunked` - Get document with chunking support
+  - `get_doc_full` - Get full document without chunking
+  - `get_doc_chunks_info` - Get document chunk metadata
+  - `create_doc_chunked` / `create_doc_full` - Create new document
+  - `update_doc_chunked` / `update_doc_full` - Update document
+  - `delete_doc` - Delete document
+  - `splitDocumentContent()` - Utility to split large documents
+- **`search-tools.ts`**:
+  - `search` - Search documents or repositories
+- **`stats-tools.ts`**:
+  - `get_group_statistics` - Team summary statistics
+  - `get_group_member_statistics` - Member statistics
+  - `get_group_book_statistics` - Repository statistics
+  - `get_group_doc_statistics` - Document statistics
 
-#### 3. `services/` - Modular Service Architecture
+#### 4. `prompts/` - MCP Prompts
 
-**Main Components**:
+**Available Prompts** (defined in `prompts/index.ts`):
+- **`analyze_yuque_doc`** - Analyze document content, provide summary, key points, and improvement suggestions
+- **`create_yuque_doc`** - Assist in creating structured Yuque documents with format suggestions
+- **`search_yuque`** - Help search and organize information in Yuque
+- **`yuque_writing_assistant`** - Provide writing suggestions including format, structure, and content optimization
+- **`yuque_knowledge_base_guide`** - Best practices for knowledge base organization and management
 
-- **`types.ts`**: Central type definitions for all Yuque entities
-  - `YuqueUser`, `YuqueGroup`, `YuqueDoc`, `YuqueRepo`
-  - `YuqueDocVersion`, `YuqueTocItem`, `YuqueSearchResult`
-  - All interface definitions shared across services
+Each prompt has:
+- `name` - Unique identifier
+- `title` - Display title
+- `argsSchema` - Zod schema for parameter validation
+- Handler function returning prompt messages
 
-- **`yuque/client.ts`**: Base HTTP client (`YuqueClient`)
-  - Axios instance management
+#### 5. `resources/` - MCP Resources
+
+**Static Resources**:
+- **`yuque-writing-guide`** (`yuque://docs/writing-guide`) - Best practices for Yuque document writing
+- **`yuque-markdown-cheatsheet`** (`yuque://docs/markdown-cheatsheet`) - Markdown syntax quick reference
+- **`yuque-api-quickstart`** (`yuque://docs/api-quickstart`) - API quick start guide
+
+**Resource Templates** (dynamic):
+- **`yuque-repo-info`** (`yuque://repos/{namespace}`) - Get repository information
+- **`yuque-doc-content`** (`yuque://docs/{namespace}/{slug}`) - Get document content
+- **`yuque-repo-toc`** (`yuque://toc/{namespace}`) - Get repository table of contents
+
+#### 6. `services/yuque/` - Modular Service Architecture
+
+**Design Pattern**: Facade with Shared Axios Instance
+
+The `YuqueService` class in `index.ts`:
+- Creates a single shared Axios instance
+- Initializes all sub-services with the shared instance
+- Provides a unified interface delegating to sub-services
+- Supports dynamic configuration updates
+
+**Service Components**:
+
+- **`client.ts`**: Base HTTP client
+  - `createAxiosInstance()` - Factory for configured Axios instances
+  - `YuqueClient` - Legacy client wrapper for config management
   - Authentication header handling
-  - Configuration update methods
   - Health check endpoint
 
-- **`yuque/user.ts`**: User operations (`UserService`)
-  - Get current user, user documents, user groups
-  
-- **`yuque/group.ts`**: Group management (`GroupService`)
-  - Group member CRUD operations
-  
-- **`yuque/repo.ts`**: Repository operations (`RepoService`)
-  - User and group repository management
-  - Repository CRUD operations
-  
-- **`yuque/document.ts`**: Document operations (`DocumentService`)
-  - Document CRUD with version management
-  - Filters out unnecessary content formats
-  
-- **`yuque/toc.ts`**: Table of contents (`TocService`)
-  - Repository TOC management
-  
-- **`yuque/search.ts`**: Search operations (`SearchService`)
-  - Document and repository search
-  
-- **`yuque/statistics.ts`**: Analytics (`StatisticsService`)
-  - Team, member, repository, and document statistics
-  
-- **`yuque/index.ts`**: Main `YuqueService` class
-  - Combines all sub-services
-  - Delegates method calls to appropriate services
-  - Maintains backward compatibility with previous monolithic design
+- **`user.ts`** (`UserService`): 
+  - `getCurrentUser()` - Get authenticated user info
+  - `getUserDocs()` - Get user's documents
+  - `getUserGroups()` - Get user's groups
 
-#### 4. `config.ts` - Configuration Management
+- **`group.ts`** (`GroupService`):
+  - `getGroupMembers()` - Get group members
+  - `updateGroupMember()` - Update member role
+  - `deleteGroupMember()` - Remove member from group
+
+- **`repo.ts`** (`RepoService`):
+  - `getUserRepos()` / `getGroupRepos()` - Get repositories
+  - `getRepo()` - Get repository details
+  - `createRepo()` / `createGroupRepo()` - Create repositories
+  - `updateRepo()` / `deleteRepo()` - Modify repositories
+
+- **`document.ts`** (`DocumentService`):
+  - `getRepoDocs()` - List documents in repository
+  - `getDoc()` - Get document details
+  - `createDoc()` / `updateDoc()` / `deleteDoc()` - CRUD operations
+  - `getDocVersions()` / `getDocVersion()` - Version management
+
+- **`toc.ts`** (`TocService`):
+  - `getRepoToc()` - Get repository table of contents
+  - `updateRepoToc()` - Modify TOC structure
+
+- **`search.ts`** (`SearchService`):
+  - `search()` - Search documents or repositories with filtering
+
+- **`statistics.ts`** (`StatisticsService`):
+  - `getGroupStatistics()` - Team summary stats
+  - `getGroupMemberStatistics()` - Member contribution stats
+  - `getGroupBookStatistics()` - Repository stats
+  - `getGroupDocStatistics()` - Document performance stats
+
+#### 7. `config.ts` - Configuration Management
 Uses Zod to validate environment variables:
 - `PORT` - HTTP server port (default 3000)
-- `YUQUE_API_TOKEN` - Yuque API token (optional)
+- `YUQUE_API_TOKEN` - Yuque API token (optional, can be provided via query param)
 - `YUQUE_API_BASE_URL` - API base URL (default https://www.yuque.com/api/v2)
 
-#### 5. `mcp_hook.ts` - Protocol Hooks
+#### 8. `mcp_hook.ts` - Protocol Hooks
 Handles special requirements in HTTP mode:
-- Extract `accessToken` and `baseUrl` from URL query parameters
-- Inject query parameters into tool call parameters
-- Support dynamic configuration override
+- `mcpHook_updateMessageEndpoint()` - Extract query params from URL, inject into endpoint
+- `mcpHook_updateMessageBody()` - Inject query parameters into tool call parameters
+- `getFixedQuery()` - Handle array-type query parameters
+- Support dynamic configuration override via query params (`accessToken`, `baseUrl`)
 
 ## Running Modes
 
@@ -154,6 +221,11 @@ Handles special requirements in HTTP mode:
 - Query parameters can dynamically override configuration
 - Start with: `npm run dev` or `npm run start`
 
+**HTTP Endpoints**:
+- `GET /health` - Health check with memory usage stats
+- `GET /sse` - SSE endpoint for MCP communication
+- `POST /messages` - Message endpoint for MCP requests
+
 **SSE Endpoint Features**:
 ```
 GET /sse?accessToken=<token>&baseUrl=<url>
@@ -162,23 +234,32 @@ GET /sse?accessToken=<token>&baseUrl=<url>
 - Each connection can use different configurations
 - Supports multi-user/multi-environment scenarios
 
+## Testing
+
+The project uses Vitest for testing.
+
+**Run tests**:
+```bash
+npm test              # Run all tests
+npm run test:watch    # Run tests in watch mode
+```
+
+**Test Structure**:
+- `test/services/` - Tests for service layer (client, user, document, etc.)
+- `test/tools/` - Tests for tool registration and functionality
+
 ## Development Guide
 
 ### Steps to Add New Tools
 
-1. **Choose or create appropriate service module in `services/yuque/`**:
-   - For user operations: `user.ts`
-   - For documents: `document.ts`
-   - For repositories: `repo.ts`
-   - For new functionality: create a new service file
-
-2. **Add API method in the service class**:
+1. **Add API method in the appropriate service module** (`services/yuque/*.ts`):
 ```typescript
 // In services/yuque/your-service.ts
-import { YuqueClient } from './client';
-import { YourType } from '../types';
+import { AxiosInstance } from 'axios';
 
-export class YourService extends YuqueClient {
+export class YourService {
+  constructor(private client: AxiosInstance) {}
+  
   async newApiMethod(param: string): Promise<YourType> {
     const response = await this.client.get(`/endpoint/${param}`);
     return response.data.data;
@@ -186,87 +267,212 @@ export class YourService extends YuqueClient {
 }
 ```
 
-3. **Add service to main YuqueService in `services/yuque/index.ts`**:
+2. **Expose method in YuqueService** (`services/yuque/index.ts`):
 ```typescript
-import { YourService } from './your-service';
+// Add service initialization in constructor
+this.yourService = new YourService(this.axiosInstance);
 
-export class YuqueService {
-  private yourService: YourService;
-  
-  constructor(apiToken: string = '', baseURL: string = 'https://www.yuque.com/api/v2') {
-    // ... other services
-    this.yourService = new YourService(apiToken, baseURL);
-  }
-  
-  async newApiMethod(param: string) {
-    return this.yourService.newApiMethod(param);
-  }
+// Add public method
+async newApiMethod(param: string) {
+  return this.yourService.newApiMethod(param);
 }
 ```
 
-4. **Register tool in `registerTools()` of `server.ts`**:
+3. **Register tool in tool module** (`tools/your-tools.ts`):
 ```typescript
-this.server.tool(
-  "tool_name",
-  "Tool description in Chinese",
-  {
-    param: z.string().describe("Parameter description"),
-    accessToken: z.string().optional().describe("Token for authenticating API requests"),
-  },
-  async ({ param, accessToken }) => {
-    try {
-      const yuqueService = this.createYuqueService(accessToken);
-      const result = await yuqueService.newApiMethod(param);
-      return {
-        content: [{ type: "text", text: JSON.stringify(result) }],
-      };
-    } catch (error) {
-      return {
-        content: [{ type: "text", text: `Error: ${error}` }],
-      };
+import { z } from "zod";
+import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { ServiceFactory, ToolResponse } from "./types";
+import { Logger } from "../server";
+
+export function registerYourTools(server: McpServer, createService: ServiceFactory): void {
+  server.tool(
+    "tool_name",
+    "Tool description in Chinese",
+    {
+      param: z.string().describe("Parameter description"),
+      accessToken: z.string().optional().describe("Token for authenticating API requests"),
+    },
+    async ({ param, accessToken }): Promise<ToolResponse> => {
+      try {
+        Logger.log(`Operation: ${param}`);
+        const yuqueService = createService(accessToken);
+        const result = await yuqueService.newApiMethod(param);
+        
+        Logger.log(`Success`);
+        return {
+          content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+        };
+      } catch (error) {
+        Logger.error(`Error:`, error);
+        return {
+          content: [{ type: "text", text: `Error: ${error}` }],
+        };
+      }
     }
+  );
+}
+```
+
+4. **Export from tools index** (`tools/index.ts`):
+```typescript
+import { registerYourTools } from "./your-tools";
+
+export function registerAllTools(server: McpServer, createService: ServiceFactory): void {
+  // ... other registrations
+  registerYourTools(server, createService);
+}
+
+// Add to AVAILABLE_TOOLS list
+export const AVAILABLE_TOOLS: ToolDefinition[] = [
+  // ... other tools
+  { name: "tool_name", description: "Tool description" },
+];
+```
+
+5. **Add tests** (`test/tools/your-tools.test.ts`):
+```typescript
+import { describe, it, expect } from "vitest";
+
+describe("Your Tools", () => {
+  it("should register tools correctly", () => {
+    // Test implementation
+  });
+});
+```
+
+6. **Update README** with new tool description
+
+### Steps to Add New Prompts
+
+1. **Register prompt in** `prompts/index.ts`:
+```typescript
+server.registerPrompt(
+  "prompt_name",
+  {
+    title: "Prompt Title",
+    description: "Prompt description",
+    argsSchema: {
+      param: z.string().describe("Parameter description"),
+    },
+  },
+  async ({ param }) => {
+    return {
+      description: `Prompt description: ${param}`,
+      messages: [
+        {
+          role: "user",
+          content: {
+            type: "text",
+            text: `Your prompt text here with ${param}`,
+          },
+        },
+      ],
+    };
   }
 );
 ```
 
-3. **Update README documentation** with new tool description
+2. **Add to AVAILABLE_PROMPTS list**
+
+### Steps to Add New Resources
+
+1. **For static resources** (`resources/index.ts`):
+```typescript
+// Add to STATIC_RESOURCES object
+const STATIC_RESOURCES: Record<string, string> = {
+  "yuque://docs/your-resource": `# Your Resource Content`,
+};
+
+// Register the resource
+server.registerResource(
+  "your-resource-name",
+  "yuque://docs/your-resource",
+  {
+    title: "Your Resource Title",
+    description: "Description",
+    mimeType: "text/markdown",
+  },
+  async (uri) => {
+    const content = STATIC_RESOURCES["yuque://docs/your-resource"];
+    return {
+      contents: [{ uri: uri.toString(), mimeType: "text/markdown", text: content }],
+    };
+  }
+);
+```
+
+2. **For dynamic resource templates**:
+```typescript
+server.registerResource(
+  "your-resource-template",
+  new ResourceTemplate("yuque://your/{param}", { list: undefined }),
+  {
+    title: "Your Resource Title",
+    description: "Description",
+    mimeType: "application/json",
+  },
+  async (uri, variables) => {
+    const param = Array.isArray(variables.param) ? variables.param[0] : variables.param;
+    // Fetch data using yuqueService
+    return {
+      contents: [{ uri: uri.toString(), mimeType: "application/json", text: JSON.stringify(data) }],
+    };
+  }
+);
+```
 
 ### Code Standards
 
 1. **Type Safety**:
-   - Define TypeScript interfaces for all API responses
-   - Use Zod to validate input parameters
+   - Define TypeScript interfaces for all API responses in `services/types.ts`
+   - Use Zod to validate input parameters for tools and prompts
    - Avoid using `any` type
+   - Export types from `tools/types.ts` for tool-related types
 
 2. **Error Handling**:
-   - All tool methods must catch exceptions
-   - Return user-friendly error messages
-   - Use `Logger.error()` to log errors
+   - All tool methods must catch exceptions and return user-friendly error messages
+   - Use `Logger.error()` to log errors through MCP logging protocol
+   - Always return a valid `ToolResponse` object even on error
 
 3. **Naming Conventions**:
-   - Class names: PascalCase (e.g., `YuqueMcpServer`)
-   - Method names: camelCase (e.g., `getUserDocs`)
-   - Tool names: snake_case (e.g., `get_user_docs`)
-   - Constants: UPPER_SNAKE_CASE
+   - Class names: PascalCase (e.g., `YuqueMcpServer`, `DocumentService`)
+   - Interface names: PascalCase with Yuque prefix (e.g., `YuqueUser`, `YuqueDoc`)
+   - Method names: camelCase (e.g., `getUserDocs`, `createDoc`)
+   - Tool names: snake_case (e.g., `get_current_user`, `create_doc`)
+   - Constants: UPPER_SNAKE_CASE (e.g., `AVAILABLE_TOOLS`, `MAXIMUM_CHUNK_SIZE`)
+   - Files: lowercase with hyphens/underscores (e.g., `user-tools.ts`, `doc_tools.ts`)
 
 4. **Documentation Strings**:
    - Tool descriptions in Chinese
    - Clear and explicit parameter descriptions
    - Include usage examples (in README)
 
+5. **Import Order**:
+   ```typescript
+   // 1. External packages
+   import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+   import { z } from "zod";
+   
+   // 2. Internal imports
+   import { ServiceFactory } from "./types";
+   import { Logger } from "../server";
+   ```
+
 ### Debugging Tips
 
 1. **Development Mode**:
    - Use `npm run dev` to start with auto-reload
-   - Check console log output
+   - Check console log output via `Logger.log()` and `Logger.error()`
 
 2. **View API Calls**:
-   - Add logs in `yuque.ts`
+   - Add logs in service methods
    - Use axios interceptors to view requests/responses
 
 3. **Test Tool Calls**:
    - HTTP mode: Use Postman or curl to test `/sse` endpoint
    - Stdio mode: Integrate into MCP client for testing
+   - Run tests: `npm test`
 
 ## Deployment Considerations
 
@@ -291,27 +497,19 @@ this.server.tool(
 ## Common Issues
 
 ### 1. Document Content Too Large Causing Timeout
-- Project has implemented `splitDocumentContent()` method
-- Automatically splits large documents into 100KB chunks
-- Each chunk includes overlapping content to maintain context
+- Project has implemented `splitDocumentContent()` method in `doc-tools.ts`
+- Automatically splits large documents into 100KB chunks (configurable)
+- Each chunk includes overlapping content (200 chars) to maintain context
+- Use `get_doc_chunked` tool for large documents
 
 ### 2. API Token Not Set
 - Server will output warning but won't exit
-- Can provide token dynamically via query parameter
+- Can provide token dynamically via query parameter: `?accessToken=your_token`
 - Suitable for multi-user scenarios
 
 ### 3. CORS Issues (HTTP Mode)
 - CORS middleware is already enabled
 - Allows access from all origins
-
-## Extension Suggestions
-
-1. **Add Caching Mechanism**: Reduce API call frequency
-2. **Implement WebSocket Support**: Provide real-time updates
-3. **Add Rate Limiting**: Prevent API abuse
-4. **Implement Batch Operations**: Improve efficiency
-5. **Add Unit Tests**: Ensure code quality
-6. **Support More Yuque APIs**: Such as comments, collaboration, etc.
 
 ## Related Resources
 
@@ -322,4 +520,4 @@ this.server.tool(
 
 ---
 
-**Last Updated**: January 5, 2026
+**Last Updated**: January 31, 2026
